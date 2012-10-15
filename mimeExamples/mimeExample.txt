@@ -1,0 +1,63 @@
+MIME-Version: 1.0
+Received: by 10.236.191.233 with SMTP id g69mr5912298yhn.113.1350099512184;
+ Fri, 12 Oct 2012 20:38:32 -0700 (PDT)
+Received: by 10.146.52.27 with HTTP; Fri, 12 Oct 2012 20:38:31 -0700 (PDT)
+Date: Sat, 13 Oct 2012 01:38:31 -0200
+Message-ID: <CAD1zWozCRMCFxJmUrb1x-bhHnp256jqv2X7NVVXzmX9N7h5Kfg@mail.gmail.com>
+Subject: Protos
+From: Franco Arolfo <arolfofranco@gmail.com>
+To: tomymehdi@gmail.com, jorgemozzino@gmail.com
+Content-Type: multipart/mixed;
+ boundary=20cf305b1280d5d15004cbe88917
+
+--20cf305b1280d5d15004cbe88917
+Content-Type: multipart/alternative; boundary=20cf305b1280d5d14704cbe88915
+
+--20cf305b1280d5d14704cbe88915
+Content-Type: text/plain; charset=ISO-8859-1
+
+Tomy te mando el codigo q hicimos la otra vez con jorge, es el proxy tcp
+que deja apsar mensajes y los loguea en la consola. Pensamos un par de
+clases y variables de instancias(mapas(username,channel) y mapa(username,
+user)) y un par de cosas mas mepa q no me acuerdo ajja en la clase user q
+se guarden todas las resticciones a ese usuario, ya sean de conexion o
+preferencias de borrado de mails como piden.
+desp pensamos en usar un xml q se lea y cargue el mapa(username, user) al
+principio de ejecucion, donde se guarden pop3server defaults y
+requerimientos pr usuario. esto es facil por q podemos usar las clases de
+java para desparcear el xml q es una boludez. Y desp pensamos eso de el
+monitoreo remoto, q se tenga un puerto donde se escuche con el mismo nio
+por instrucciones de un protocolo nuestro.
+Nota: en el xml solo se guardan als configuraicones defaults, osae cuando
+arranca la aplicacion. desp todo lo q se cambie por minitoreo remoto no
+cambia el xml, por comodidad nuestra.
+jorge si me olvide de algo nomas ten la dicha de anunciarlo a viva voz
+
+saludoos ;)
+
+--20cf305b1280d5d14704cbe88915
+Content-Type: text/html; charset=ISO-8859-1
+Content-Transfer-Encoding: quoted-printable
+
+Tomy te mando el codigo q hicimos la otra vez con jorge, es el proxy tcp qu=
+e deja apsar mensajes y los loguea en la consola. Pensamos un par de clases=
+ y variables de instancias(mapas(username,channel) y mapa(username, user)) =
+y un par de cosas mas mepa q no me acuerdo ajja en la clase user q se guard=
+en todas las resticciones a ese usuario, ya sean de conexion o preferencias=
+ de borrado de mails como piden.<div>
+
+desp pensamos en usar un xml q se lea y cargue el mapa(username, user) al p=
+rincipio de ejecucion, donde se guarden pop3server defaults y requerimiento=
+s pr usuario. esto es facil por q podemos usar las clases de java para desp=
+arcear el xml q es una boludez. Y desp pensamos eso de el monitoreo remoto,=
+ q se tenga un puerto donde se escuche con el mismo nio por instrucciones d=
+e un protocolo nuestro.</div>
+
+<div>Nota: en el xml solo se guardan als configuraicones defaults, osae cua=
+ndo arranca la aplicacion. desp todo lo q se cambie por minitoreo remoto no=
+ cambia el xml, por comodidad nuestra.</div><div>jorge si me olvide de algo=
+ nomas ten la dicha de anunciarlo a viva voz</div>
+
+<div><br></div><div>saludoos ;)</div>
+
+--20cf305b1280d5d14704cbe88915--
