@@ -5,6 +5,16 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 public class AeSimpleMD5 { 
+	
+	public static void main(String[] args) throws NoSuchAlgorithmException, UnsupportedEncodingException {
+		String s = "<1896.697170952@dbc.mtview.ca.us>tanstaaf";
+		
+		String resp = AeSimpleMD5.MD5(s);
+		
+		//System.out.println(new String(AeSimpleMD5.convertToHex(resp.getBytes())));
+		
+		
+	}
 	 
     private static String convertToHex(byte[] data) { 
         StringBuffer buf = new StringBuffer();
@@ -28,6 +38,8 @@ public class AeSimpleMD5 {
         byte[] md5hash = new byte[32];
         md.update(text.getBytes("iso-8859-1"), 0, text.length());
         md5hash = md.digest();
-        return convertToHex(md5hash);
+        System.out.println( convertToHex(md5hash) );
+        System.out.println(md.getProvider());
+        return null;
     } 
 }

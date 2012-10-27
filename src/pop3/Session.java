@@ -16,6 +16,7 @@ public class Session {
 	private State state = State.AUTH;
 	private String digest;
 	private CharBuffer auxBuffer = CharBuffer.allocate(BUFFER_SIZE);
+	private User user;
 
 	public Session(SocketChannel channel, boolean fromServer) {
 		this(null, channel, fromServer);
@@ -26,9 +27,7 @@ public class Session {
 		this.channel = channel;
 		this.fromServer = fromServer;
 		this.digest = "" + System.currentTimeMillis();
-		if (!isFromServer()) {
-			this.buffer.put(new String("+OK POP3 server Aloha <" + digest + ">\n").getBytes());
-		}
+		
 	}
 
 	public ByteBuffer getBuffer() {
@@ -80,7 +79,7 @@ public class Session {
 	}
 	
 	public enum State {
-		AUTH, TRANS, UPDATE, FIRST, PASS;
+		AUTH, TRANS, UPDATE, FIRST, PASS, CONNECTION_ERROR;
 	}
 	
 	public class Command {
@@ -142,5 +141,13 @@ public class Session {
 		}
 		return null;
 		
+	}
+	
+	public void setUser(User user) {
+		this.user = user;
+	}
+
+	public User getUser() {
+		return user;
 	}
 }

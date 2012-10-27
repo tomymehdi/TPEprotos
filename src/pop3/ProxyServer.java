@@ -3,7 +3,6 @@ package pop3;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -30,6 +29,9 @@ public class ProxyServer {
 
 	public static void main(String[] args) throws IOException {
 		ProxyServer proxy = new ProxyServer();
+		User u = new User(DEFAULT_USER_URL);
+		u.setMaxConnections(3);
+		proxy.usersMap.put("tmehdi", u);
 		proxy.run();
 	}
 
@@ -70,6 +72,18 @@ public class ProxyServer {
 							SelectionKey.OP_WRITE);
 					Session session = new Session(clientKey, clntChan, false);
 					clientKey.attach(session);
+					if (RestrictedIP.isBanned(clntChan.socket()
+							.getInetAddress())) {
+						session.setState(State.CONNECTION_ERROR);
+						session.getBuffer().put(
+								new String("-ERR ROFL tu ip esta baneada\n")
+										.getBytes());
+					} else {
+						session.getBuffer().put(
+								new String("+OK POP3 server Aloha <"
+										+ session.getDigest() + ">\n")
+										.getBytes());
+					}
 
 				}
 				if (key.isValid() && key.isReadable()) {
@@ -152,10 +166,16 @@ public class ProxyServer {
 							buffer.flip();
 							ansSession.getBuffer().put(buffer);
 							buffer.compact();
-							if (session.getState().equals(State.PASS)  ) {
+							if (session.getState().equals(State.PASS)) {
 								if (ans.toLowerCase().startsWith("+ok")) {
-								session.setState(State.TRANS);
-								ansSession.setState(State.TRANS);
+									if (!session.getUser().connect()) {
+										ansSession.setState(State.CONNECTION_ERROR);
+										ansSession.getBuffer().clear();
+										ansSession.getBuffer().put("-ERR Excedio la cantidad maxima de conexiones\n".getBytes());
+									} else {
+										session.setState(State.TRANS);
+										ansSession.setState(State.TRANS);
+									}
 								} else {
 									session.setState(State.AUTH);
 								}
@@ -175,6 +195,13 @@ public class ProxyServer {
 						key.interestOps(SelectionKey.OP_READ);
 					}
 					buf.compact();
+					if (session.getState().equals(State.CONNECTION_ERROR)) {
+						SocketChannel channel = (SocketChannel) key.channel();
+						channel.close();
+						if ( session.getChannel().equals(channel) ) {
+							session.getChannel().close();
+						}
+					}
 
 				}
 				keyIter.remove();
@@ -214,6 +241,16 @@ public class ProxyServer {
 			ansSession.setState(State.FIRST);
 			senderSocketKey.attach(ansSession);
 
+			
+			if ( usersMap.containsKey(userName) ) {
+				ansSession.setUser(usersMap.get(userName));
+				session.setUser(usersMap.get(userName));
+			} else {
+				User u = new User(server);
+				ansSession.setUser(u);
+				session.setUser(u);
+			}
+			
 			// session.getBuffer().put("+OK\n".getBytes());
 			// session.setChannel(senderSocket);
 
@@ -221,7 +258,8 @@ public class ProxyServer {
 			Session ansSession = (Session) session.getKey().attachment();
 			ansSession.getBuffer()
 					.put((command.getCommand() + "\n").getBytes());
-			if ( session.getState().equals(State.AUTH) && command.getCommandName().equals("pass") ) {
+			if (session.getState().equals(State.AUTH)
+					&& command.getCommandName().equals("pass")) {
 				ansSession.setState(State.PASS);
 			}
 		}
