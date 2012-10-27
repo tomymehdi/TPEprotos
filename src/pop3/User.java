@@ -4,12 +4,15 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class User {
-	
-	private String URI;
+
+	private String server;
 	private List<Restriction> restrictions = new LinkedList<Restriction>();
 
-	public User(String URI) {
-		this.URI = URI;
+	public User(String server) {
+		this.server = server;
 	}
 
+	public String getServer() {
+		return server;
+	}
 }
