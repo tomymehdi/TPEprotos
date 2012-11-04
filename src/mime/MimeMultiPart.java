@@ -8,4 +8,8 @@ public class MimeMultiPart {
 	String type;
 	String boundary;
 	List<MimePart> parts = new LinkedList<MimePart>();
+	
+	public List<MimePart> getParts() {
+		return parts;
+	}
 }

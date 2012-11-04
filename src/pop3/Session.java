@@ -4,19 +4,23 @@ import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.LinkedList;
+import java.util.Queue;
 
 public class Session {
 
-	private static final int BUFFER_SIZE = 1024;
+	public static final int BUFFER_SIZE = 1024;
 
-	private ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
+	//private ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
 	private SelectionKey key;
 	private SocketChannel channel;
 	private boolean fromServer;
 	private State state = State.AUTH;
-	private String digest;
 	private CharBuffer auxBuffer = CharBuffer.allocate(BUFFER_SIZE);
 	private User user;
+	private Queue<ByteBuffer> bufferQueue = new LinkedList<ByteBuffer>();
+	private TransformThread thread;
+	
 
 	public Session(SocketChannel channel, boolean fromServer) {
 		this(null, channel, fromServer);
@@ -26,17 +30,24 @@ public class Session {
 		this.key = key;
 		this.channel = channel;
 		this.fromServer = fromServer;
-		this.digest = "" + System.currentTimeMillis();
-		
 	}
 
-	public ByteBuffer getBuffer() {
-		return buffer;
+//	public ByteBuffer getBuffer() {
+//		return buffer;
+//	}
+	
+	public boolean canWrite() {
+		return !bufferQueue.isEmpty();
 	}
+	
+	public ByteBuffer getWritingBuffer() {
+		return bufferQueue.poll();
+	}
+	
 
-	public void setBuffer(ByteBuffer buffer) {
-		this.buffer = buffer;
-	}
+//	public void setBuffer(ByteBuffer buffer) {
+//		this.buffer = buffer;
+//	}
 
 	public SelectionKey getKey() {
 		return key;
@@ -62,14 +73,6 @@ public class Session {
 		this.fromServer = fromServer;
 	}
 
-	public String getDigest() {
-		return digest;
-	}
-	
-	public void setDigest(String digest) {
-		this.digest = digest;
-	}
-
 	public State getState() {
 		return state;
 	}
@@ -79,7 +82,7 @@ public class Session {
 	}
 	
 	public enum State {
-		AUTH, TRANS, UPDATE, FIRST, PASS, CONNECTION_ERROR;
+		AUTH, TRANS, UPDATE, FIRST, PASS, CONNECTION_ERROR, TRANSFORM, FIRST_TRANSFORM;
 	}
 	
 	public class Command {
@@ -121,26 +124,14 @@ public class Session {
 
 	private Command processCommand(String string) {
 		if( State.AUTH.equals(state) ){
-			if (string.toLowerCase().startsWith("user")){
-				String[] split = string.split(" ");
-				if ( split.length < 2 ) {
-					return null;
-				}
-				return new Command("user", string);
-				
-			} else {
-				if (string.toLowerCase().startsWith("pass")){
-					return new Command("pass", string);
-					
-				}
-			}
+			//TODO Verificar que solo sea user, pass y quit...el resto rebotarlos.
+			String[] split = string.split(" ");
+				return new Command(split[0], string);
 		} else {
 			String[] split = string.split(" ");
 			System.out.println("-----" +split[0]);
 			return new Command(split[0], string);
 		}
-		return null;
-		
 	}
 	
 	public void setUser(User user) {
@@ -149,5 +140,40 @@ public class Session {
 
 	public User getUser() {
 		return user;
+	}
+
+	public void addBuffer(ByteBuffer buffer) {
+		System.out.println("Agregando buffer1");
+		bufferQueue.add(buffer);
+	}
+
+	public void clearBuffers() {
+		bufferQueue.clear();
+		
+	}
+
+	public void addToBuffer(byte[] bytes) {
+		System.out.println("Agregando buffer");
+		ByteBuffer buffer = ByteBuffer.allocate(bytes.length);
+		buffer.put(bytes);
+		buffer.flip();
+		bufferQueue.add(buffer);
+	}
+
+	public void addToTransfromThread(ByteBuffer buffer) {
+		System.out.println("Adding a buffer to transformation thread");
+		thread.addBuffer(buffer);
+	}
+	
+	public void transformUsing(String path) {
+		thread = new TransformThread(path, key);
+	}
+	
+	public void runTransformation() {
+		thread.start();
+	}
+	
+	public void finishTransformation() {
+		thread.finished();
 	}
 }
