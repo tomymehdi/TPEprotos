@@ -2,6 +2,7 @@ package pop3;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -9,39 +10,43 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import pop3.Session.Command;
 import pop3.Session.State;
+import pop3.restriction.Restriction;
+import pop3.restriction.SizeRestriction;
 
 public class ProxyServer {
 
 	private static final int TIMEOUT = 3000; // Wait timeout (milliseconds)
-	public static final String DEFAULT_USER_URL = "localhost";
 	private static final int POP3_SERVER_PORT = 10000;
 
+	private String defaultServer = "localhost";
+	
 	private Selector selector;
-	private Map<String, Transformation> transformations = new HashMap<String, Transformation>();
-	private RstrictedIp restrictedIps;
+	//TODO: Agregarlo!
+	private RestrictedIP restrictedIps;
 	private Map<String, User> usersMap = new HashMap<String, User>();
 	private ConfigurationProtocol configProtocol;
 	private String transformerPath;
-
-	// TODO revisar la clase AeSimpleMD5 para ver como se usa Message
-	// diggest....
+	private List<Restriction> restrictions = new LinkedList<Restriction>();
 
 	public static void main(String[] args) throws IOException {
 		ProxyServer proxy = new ProxyServer();
-		User u = new User(DEFAULT_USER_URL);
+		User u = new User("localhost");
 		u.setMaxConnections(3);
 		proxy.usersMap.put("jmozzino", u);
-		proxy.transformerPath = "src/transformation/l337.jar";
-//		proxy.transformerPath = "cat";
+		u.addRestriction(new SizeRestriction(1));
+		//proxy.transformerPath = "/home/jorge/l33tTransformer";
+		proxy.transformerPath = "cat";
 		proxy.run();
 	}
 
 	public void run() throws IOException {
-		configProtocol = new ConfigurationProtocol(usersMap);
+		configProtocol = new ConfigurationProtocol(this);
 		this.selector = Selector.open();
 		ServerSocketChannel listnChannel = ServerSocketChannel.open();
 		ServerSocketChannel configListnChannel = ServerSocketChannel.open();
@@ -94,8 +99,6 @@ public class ProxyServer {
 
 						Session session = (Session) key.attachment();
 						SelectionKey ansKey = (SelectionKey) session.getKey();
-						SocketChannel ansChannel = (SocketChannel) session
-								.getChannel();
 						SocketChannel channel = (SocketChannel) key.channel();
 
 						long bytesRead = 0;
@@ -146,28 +149,93 @@ public class ProxyServer {
 								auxBuffer.flip();
 								if (session.getState().equals(
 										State.FIRST_TRANSFORM)) {
-									//Sacar la primera linea +OK...
-									ByteBuffer okBuffer = ByteBuffer.allocate(Session.BUFFER_SIZE);
-									byte b;
-									System.out.println(auxBuffer);
-									while ( (b = auxBuffer.get()) != '\n') {
-										okBuffer.put(b);
-									}
-									okBuffer.put(b);
+									// Sacar la primera linea +OK...
+									ByteBuffer okBuffer = ByteBuffer
+											.allocate(Session.BUFFER_SIZE);
 									Session ansSession = ((Session) session
 											.getKey().attachment());
+									try {
+										byte b;
+										while ((b = auxBuffer.get()) != '\n') {
+											okBuffer.put(b);
+										}
+										okBuffer.put(b);
+									} catch (BufferUnderflowException e) {
+										ansSession
+												.addToBuffer("-ERR El server no devolvio una respuesta valida\n"
+														.getBytes());
+										session.getKey().interestOps(
+												SelectionKey.OP_WRITE);
+										keyIter.remove();
+										continue;
+									}
 									okBuffer.flip();
-									//auxBuffer.compact();
 									ansSession.addBuffer(okBuffer);
+									session.getKey().interestOps(
+											SelectionKey.OP_WRITE);
+									if (okBuffer.get(0) == '-') {
+										keyIter.remove();
+										continue;
+									}
 									session.runTransformation();
 									session.setState(State.TRANSFORM);
 								}
-								boolean hasPoint = auxBuffer.get(auxBuffer.limit() - 2) == '.';
+								boolean hasPoint = (auxBuffer.get(0) == '.' && auxBuffer
+										.get(1) == '\n')
+										|| (auxBuffer
+												.get(auxBuffer.limit() - 2) == '.' && auxBuffer
+												.get(auxBuffer.limit() - 1) == '\n');
 								session.addToTransfromThread(auxBuffer);
-								if ( hasPoint ) {
+								if (hasPoint) {
 									session.setState(State.TRANS);
 									session.finishTransformation();
-//									session.getKey().interestOps(SelectionKey.OP_WRITE);
+								}
+							} else if (session.getState()
+									.equals(State.DELETING)
+									|| session.getState().equals(
+											State.FIRST_DELETING)) {
+								auxBuffer.flip();
+								if (session.getState().equals(
+										State.FIRST_DELETING)) {
+									// Sacar la primera linea +OK...
+									ByteBuffer okBuffer = ByteBuffer
+											.allocate(Session.BUFFER_SIZE);
+									Session ansSession = ((Session) session
+											.getKey().attachment());
+									try {
+										byte b;
+										while ((b = auxBuffer.get()) != '\n') {
+											okBuffer.put(b);
+										}
+										okBuffer.put(b);
+									} catch (BufferUnderflowException e) {
+										ansSession
+												.addToBuffer("-ERR El server no devolvio una respuesta valida\n"
+														.getBytes());
+										session.getKey().interestOps(
+												SelectionKey.OP_WRITE);
+										keyIter.remove();
+										continue;
+									}
+									okBuffer.flip();
+									session.getKey().interestOps(
+											SelectionKey.OP_WRITE);
+									if (okBuffer.get(0) == '-') {
+										ansSession.addBuffer(okBuffer);
+										keyIter.remove();
+										continue;
+									}
+									session.initializateMailParsing(restrictions);
+									session.setState(State.DELETING);
+								}
+								boolean hasPoint = (auxBuffer.get(0) == '.' && auxBuffer
+										.get(1) == '\n')
+										|| (auxBuffer
+												.get(auxBuffer.limit() - 2) == '.' && auxBuffer
+												.get(auxBuffer.limit() - 1) == '\n');
+								session.addToMailParsingThread(auxBuffer);
+								if (hasPoint) {
+									session.setState(State.TRANS);
 								}
 							} else if (!session.getState().equals(
 									State.CONNECTION_ERROR)) {
@@ -176,10 +244,10 @@ public class ProxyServer {
 										.getKey().attachment());
 								auxBuffer.flip();
 								String ans = new String(auxBuffer.array())
-								.substring(auxBuffer.arrayOffset(),
-										auxBuffer.limit());
+										.substring(auxBuffer.arrayOffset(),
+												auxBuffer.limit());
 								ansSession.addBuffer(auxBuffer);
-//								auxBuffer.compact();
+								// auxBuffer.compact();
 								if (session.getState().equals(State.PASS)) {
 									if (ans.toLowerCase().startsWith("+ok")) {
 										User.ConnectionErrors error = session
@@ -256,7 +324,7 @@ public class ProxyServer {
 			}
 			String userName = command.getCommand().split(" ")[1];
 			User user;
-			String server = DEFAULT_USER_URL;
+			String server = defaultServer;
 			if ((user = usersMap.get(userName)) != null
 					&& user.getServer() != null) {
 				// user configuration saved
@@ -292,11 +360,41 @@ public class ProxyServer {
 					&& command.getCommandName().equals("pass")) {
 				ansSession.setState(State.PASS);
 			} else if (session.getState().equals(State.TRANS)
-					&& command.getCommandName().equals("retr") && transformerPath != null ) {
+					&& command.getCommandName().equals("retr")
+					&& transformerPath != null) {
 				ansSession.setState(State.FIRST_TRANSFORM);
 				ansSession.transformUsing(transformerPath);
+			} else if (session.getState().equals(State.TRANS)
+					&& command.getCommandName().equals("dele")) {
+				User u = session.getUser();
+				if (restrictions.isEmpty() && !u.hasRestrictions()) {
+					ansSession.addToBuffer(command.getCommand().getBytes());
+				} else {
+					String[] delArgs = command.getCommand().split(" ");
+					if (delArgs.length > 1) {
+						ansSession.addToBuffer(("retr " + delArgs[1])
+								.getBytes());
+						ansSession.setState(State.FIRST_DELETING);
+//						ansSession.initializateMailParsing(restrictions);
+					} else {
+						ansSession.addToBuffer(command.getCommand().getBytes());
+					}
+				}
 			}
 		}
 	}
 
+	public Map<String, User> getUsersMap() {
+		return usersMap;
+	}
+
+	public String getDefaultServer() {
+		return defaultServer;
+	}
+
+	public void setDefaultServer(String defaultServer) {
+		this.defaultServer = defaultServer;
+		
+	}
+	
 }

@@ -54,10 +54,6 @@ public class TransformThread extends Thread {
 					session.addToBuffer(new String(charBuffer).getBytes());
 					System.out.println(System.currentTimeMillis());
 					key.interestOps(SelectionKey.OP_WRITE);
-//					try {
-//						Thread.sleep(3000);
-//					} catch (InterruptedException e) {
-//					}
 				}
 				ByteBuffer b;
 				if ( bufferQueue.isEmpty() ) {

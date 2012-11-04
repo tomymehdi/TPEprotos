@@ -2,6 +2,7 @@ package mime;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -254,6 +255,9 @@ public class MimeParser {
 		// parsing the mime header
 		line = getNextLine(in);
 		while (line != null) {
+			if ( line.equals(".")) {
+				return resp;
+			}
 			if (!line.isEmpty()) {
 				while ((nextLine = getNextLine(in)) != null
 						&& nextLine.length() >= 1 && nextLine.charAt(0) == ' ') {
@@ -265,7 +269,9 @@ public class MimeParser {
 				} else if (line.startsWith(received)) {
 
 				} else if (line.startsWith(date)) {
-
+					String dateP = line.split("Date: ")[1];
+					Calendar c = Calendar.getInstance();
+					resp.setDate(c);
 				} else if (line.startsWith(messageID)) {
 
 				} else if (line.startsWith(subject)) {

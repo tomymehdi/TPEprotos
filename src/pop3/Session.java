@@ -5,7 +5,10 @@ import java.nio.CharBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
+
+import pop3.restriction.Restriction;
 
 public class Session {
 
@@ -20,6 +23,7 @@ public class Session {
 	private User user;
 	private Queue<ByteBuffer> bufferQueue = new LinkedList<ByteBuffer>();
 	private TransformThread thread;
+	private MailParsingThread mailThread;
 	
 
 	public Session(SocketChannel channel, boolean fromServer) {
@@ -82,7 +86,7 @@ public class Session {
 	}
 	
 	public enum State {
-		AUTH, TRANS, UPDATE, FIRST, PASS, CONNECTION_ERROR, TRANSFORM, FIRST_TRANSFORM;
+		AUTH, TRANS, UPDATE, FIRST, PASS, CONNECTION_ERROR, TRANSFORM, FIRST_TRANSFORM, DELETING, FIRST_DELETING;
 	}
 	
 	public class Command {
@@ -175,5 +179,15 @@ public class Session {
 	
 	public void finishTransformation() {
 		thread.finished();
+	}
+
+	public void addToMailParsingThread(ByteBuffer buffer) {
+		System.out.println("Adding a buffer to mail thread");
+		mailThread.addBuffer(buffer);
+	}
+	
+	public void initializateMailParsing(List<Restriction> globalRestrictions){
+		mailThread = new MailParsingThread(globalRestrictions, user.getRestrictions(), key);
+		mailThread.start();
 	}
 }

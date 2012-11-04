@@ -5,6 +5,8 @@ import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
 
+import pop3.restriction.Restriction;
+
 public class User {
 
 	private String server;
@@ -31,7 +33,7 @@ public class User {
 		ConnectionErrors(String str) {
 			this.str = str;
 		}
-		
+
 		String getMessage() {
 			return str;
 		}
@@ -43,7 +45,7 @@ public class User {
 				return ConnectionErrors.MAX_CONNECTIONS_EXCEEDED;
 			}
 		}
-		if ( unallowedConnectionInterval.belongs(Calendar.getInstance().get(
+		if (unallowedConnectionInterval.belongs(Calendar.getInstance().get(
 				Calendar.HOUR_OF_DAY))) {
 			return ConnectionErrors.NOT_ALLOWED_NOW;
 		}
@@ -62,7 +64,7 @@ public class User {
 
 		}
 	}
-	
+
 	public void addAllowedConnectionInterval(int from, int to) {
 		unallowedConnectionInterval.addInterval(from, to);
 	}
@@ -71,7 +73,7 @@ public class User {
 		List<Integer> interval = new ArrayList<Integer>();
 
 		TimeInterval() {
-			
+
 		}
 
 		void set(ArrayList<Integer> list) {
@@ -90,7 +92,7 @@ public class User {
 				}
 			}
 		}
-		
+
 		boolean belongs(int x) {
 			for (int i = 0; i < interval.size() / 2; i += 2) {
 				if (interval.get(i) <= x && x <= interval.get(i + 1)) {
@@ -99,9 +101,9 @@ public class User {
 			}
 			return false;
 		}
-		
+
 		void addInterval(int from, int to) {
-			if ( from <= to ) {
+			if (from <= to) {
 				interval.add(from);
 				interval.add(to);
 			} else {
@@ -109,6 +111,23 @@ public class User {
 			}
 		}
 
+	}
+
+	public boolean hasRestrictions() {
+		return !restrictions.isEmpty();
+	}
+
+	public List<Restriction> getRestrictions() {
+		return restrictions;
+	}
+
+	public void setServer(String server) {
+		this.server = server;
+
+	}
+
+	public void addRestriction(Restriction restriction) {
+		restrictions.add(restriction);
 	}
 
 }

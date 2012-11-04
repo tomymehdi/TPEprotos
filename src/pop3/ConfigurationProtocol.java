@@ -9,25 +9,27 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
-import java.util.Map;
+
+import pop3.restriction.FromRestriction;
+import pop3.restriction.Restriction;
+import pop3.restriction.SizeRestriction;
 
 public class ConfigurationProtocol {
 
-	
-	private Map<String, User> usersMap;
+	ProxyServer proxy;
 
-	public ConfigurationProtocol(Map<String, User> usersMap) {
-		this.usersMap = usersMap;
+	public ConfigurationProtocol(ProxyServer proxy) {
+		this.proxy = proxy;
 	}
-	
-	public void doAccept(Selector selector, SelectionKey key) throws IOException {
-		SocketChannel clntChan = ((ServerSocketChannel) key
-				.channel()).accept();
+
+	public void doAccept(Selector selector, SelectionKey key)
+			throws IOException {
+		SocketChannel clntChan = ((ServerSocketChannel) key.channel()).accept();
 		clntChan.configureBlocking(false);
 		clntChan.register(selector, SelectionKey.OP_READ,
 				ByteBuffer.allocate(Session.BUFFER_SIZE));
 	}
-	
+
 	public void doRead(Selector selector, SelectionKey key) throws IOException {
 		ByteBuffer buf = (ByteBuffer) key.attachment();
 		SocketChannel channel = (SocketChannel) key.channel();
@@ -41,12 +43,11 @@ public class ConfigurationProtocol {
 			String command = new String(byteArray);
 			System.out.println(command);
 			buf.clear();
-			buf.put(executeCommand(parseCommand(command))
-					.getBytes());
+			buf.put(executeCommand(parseCommand(command), key).getBytes());
 			key.interestOps(SelectionKey.OP_WRITE);
 		}
 	}
-	
+
 	public void doWrite(Selector selector, SelectionKey key) throws IOException {
 		ByteBuffer buf = (ByteBuffer) key.attachment();
 		SocketChannel channel = (SocketChannel) key.channel();
@@ -57,14 +58,14 @@ public class ConfigurationProtocol {
 		}
 		buf.compact();
 	}
-	
+
 	private String[] parseCommand(String command) {
 		command = command.substring(0, command.indexOf('\n')).replaceAll(
 				"[\t ]+", " ");
 		return command.split(" ");
 	}
 
-	private String executeCommand(String[] args) {
+	private String executeCommand(String[] args, SelectionKey key) {
 		if (args.length == 0) {
 			return "-ERR Unknown command\n";
 		}
@@ -90,13 +91,17 @@ public class ConfigurationProtocol {
 			return executeStat(args);
 		}
 		if (command.equals("CLOSE")) {
-			return executeClose(args);
+			return executeClose(args, key);
 		}
 		return "-ERR Unknown command\n";
 	}
 
-	private String executeClose(String[] args) {
-		// TODO Hacer lo que haya que hacer
+	private String executeClose(String[] args, SelectionKey key) {
+		try {
+			key.channel().close();
+		} catch (IOException e) {
+			return "-ERR Couldn't close the channel\n";
+		}
 		return "+OK See ya!\n";
 	}
 
@@ -159,76 +164,94 @@ public class ConfigurationProtocol {
 		if (condition.length < 1) {
 			return "-ERR Invalid arguments";
 		}
-		String conditionStr = "";
-		for (String c : condition) {
-			conditionStr += c;
-		}
 		if (delType.equals("DATE")) {
-			return setStructureRestriction(username, conditionStr);
+			return setStructureRestriction(username, condition);
 		}
 		if (delType.equals("FROM")) {
-			return setFromRestriction(username, conditionStr);
+			return setFromRestriction(username, condition);
 		}
 		if (delType.equals("HEADER")) {
-			return setHeaderRestriction(username, conditionStr);
+			return setHeaderRestriction(username, condition);
 		}
 		if (delType.equals("CTYPE")) {
-			return setContentTypeRestriction(username, conditionStr);
+			return setContentTypeRestriction(username, condition);
 		}
 		if (delType.equals("SIZE")) {
-			return setSizeRestriction(username, conditionStr);
+			return setSizeRestriction(username, condition);
 		}
 		if (delType.equals("STRUCT")) {
-			return setStructureRestriction(username, conditionStr);
+			return setStructureRestriction(username, condition);
 		}
 		return "-ERR Invalid type\n";
 	}
 
-	private String setFromRestriction(String username, String condition) {
+	private String setFromRestriction(String username, String[] condition) {
+
+		if (condition.length < 2) {
+			return "-ERR Invalid arguments\n";
+		}
+		boolean exactMatch = Boolean.valueOf(condition[1]);
+		return addRestriction(username, new FromRestriction(condition[0],
+				exactMatch));
+
+	}
+
+	private String addRestriction(String username, Restriction restriction) {
+		User u = proxy.getUsersMap().get(username);
+		if (u == null) {
+			u = new User(proxy.getDefaultServer());
+		}
+		u.addRestriction(restriction);
+		return "+OK Restriction added\n";
+	}
+
+	private String setHeaderRestriction(String username, String[] condition) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
-	private String setHeaderRestriction(String username, String condition) {
+	private String setContentTypeRestriction(String username, String[] condition) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
-	private String setContentTypeRestriction(String username, String condition) {
-		// TODO Auto-generated method stub
-		return null;
+	private String setSizeRestriction(String username, String[] condition) {
+		if (condition.length < 1) {
+			return "-ERR Invalid arguments\n";
+		}
+		try {
+			return addRestriction(username,
+					new SizeRestriction(Integer.valueOf(condition[0])));
+		} catch (NumberFormatException e) {
+			return "-ERR Invalid arguments\n";
+		}
 	}
 
-	private String setSizeRestriction(String username, String condition) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	private String setStructureRestriction(String username, String condition) {
+	private String setStructureRestriction(String username, String[] condition) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	private String executeLoginRestrict(String username, int timesPerDay) {
 		User u;
-		if (usersMap.containsKey(username)) {
-			u = usersMap.get(username);
+		if (proxy.getUsersMap().containsKey(username)) {
+			u = proxy.getUsersMap().get(username);
 		} else {
-			u = new User(ProxyServer.DEFAULT_USER_URL);
+			u = new User(proxy.getDefaultServer());
 		}
-		usersMap.put(username, u);
+		proxy.getUsersMap().put(username, u);
 		u.setMaxConnections(timesPerDay);
 		return "+OK!\n";
 	}
 
 	private String executeTimeRestrict(String username, int from, int to) {
 		User u;
-		if (usersMap.containsKey(username)) {
-			u = usersMap.get(username);
+		if (proxy.getUsersMap().containsKey(username)) {
+			u = proxy.getUsersMap().get(username);
 		} else {
-			u = new User(ProxyServer.DEFAULT_USER_URL);
+			u = new User(proxy.getDefaultServer());
 		}
-		usersMap.put(username, u);
+		proxy.getUsersMap().put(username, u);
 		u.addAllowedConnectionInterval(from, to);
 		return "+OK!\n";
 	}
@@ -242,7 +265,7 @@ public class ConfigurationProtocol {
 	}
 
 	private void setDefaultServer(String string) {
-		// TODO Poner el codigo que va.
+		proxy.setDefaultServer(string);
 	}
 
 	private String executeServer(String[] args) {
@@ -250,23 +273,23 @@ public class ConfigurationProtocol {
 			return "-ERR Invalid arguments\n";
 		}
 		String username = args[0];
-		if ( username.equals("*") ) {
-			for ( String user : usersMap.keySet() ) {
-				setServer(user, args.length==1?null:args[1]);
+		if (username.equals("*")) {
+			for (String user : proxy.getUsersMap().keySet()) {
+				setServer(user, args.length == 1 ? null : args[1]);
 			}
-			if ( args.length != 1 ) {
+			if (args.length != 1) {
 				setDefaultServer(args[1]);
 			}
 		} else {
-			setServer(username, args.length==1?null:args[1]);
+			setServer(username, args.length == 1 ? null : args[1]);
 		}
 		return "+OK " + username + "'s server changed to " + args[1];
 	}
 
 	private void setServer(String username, String server) {
-		User u = usersMap.get(username);
-		if ( u == null ) {
-			usersMap.put(username, new User(server));
+		User u = proxy.getUsersMap().get(username);
+		if (u == null) {
+			proxy.getUsersMap().put(username, new User(server));
 		} else {
 			u.setServer(server);
 		}
