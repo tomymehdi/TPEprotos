@@ -13,9 +13,9 @@ public class SizeRestriction implements Restriction {
 	@Override
 	public boolean validateRestriction(MimeInfoSimplified data) {
 		if ( data.getMailSizeInBytes() <= size ) {
-			return true;
+			return false;
 		}
-		return false;
+		return true;
 	}
 	
 	

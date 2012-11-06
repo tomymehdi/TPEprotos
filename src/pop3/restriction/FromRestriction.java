@@ -16,12 +16,12 @@ public class FromRestriction implements Restriction {
 	public boolean validateRestriction(MimeInfoSimplified data) {
 		if (exactMatch) {
 			if (data.getFrom().equals(from)) {
-				return true;
+				return false;
 			}
 		} else if (data.getFrom().contains(from)) {
-			return true;
+			return false;
 		}
-		return false;
+		return true;
 	}
 
 }

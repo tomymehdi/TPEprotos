@@ -1,0 +1,54 @@
+<proxyServerConfiguration>
+
+	<defaultServer>pop3.alu.itba.edu.ar</defaultServer>
+	
+	<monitoringPort>9090</monitoringPort>
+	
+	<administrators>
+		<administrator>
+			<usernmae>farolfo</usernmae>
+			<password>123465</password>
+		</administrator>
+		<administrator>
+			<usernmae>jmozzino</usernmae>
+			<password>123465</password>
+		</administrator>
+		<administrator>
+			<usernmae>tmehdi</usernmae>
+			<password>123465</password>
+		</administrator>
+	</administrators>
+	
+	<restrictedIps>
+		<ip>124.125.123.2</ip>
+		<ip>124.1.123.2</ip>
+		<submask>125.21.0.0/16</submask>
+	</restrictedIps>
+	
+	<userRestrictions>
+		<userRestriction>
+			<username>farolfo</username>
+			<server>gmail.pop3.com.ar</server>
+			<restrictions>
+				<timesToLogin><!-- Horarios en los que el usuario se puede registrar, sino esta se puede registrar en cualqueir momento -->
+					<from>16:00</from><to>21:00</to>
+				</timesToLogin>
+				<countLoginsPerDay><!-- Cantidad de veces que se puede loguear el usuario por dia, sino esta no tiene limite de veces -->
+					4
+				</countLoginsPerDay>
+				<deletion>
+					<date><day></day><month></month><year></year></date>
+					<from>username</from>
+					<ctype>/audio</ctype>
+					<size>400</size>		
+				</deletion>
+			</restrictions>
+		</userRestriction>
+	</userRestrictions>
+	
+	<transformations>
+		<path>/bin/echo</path>
+		<path>/bin/cat</path>
+	</transformations>
+	
+</proxyServerConfiguration>

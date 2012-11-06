@@ -6,5 +6,7 @@
 	<classpathentry kind="lib" path="librarys/joda-time-2.1/joda-time-2.1-javadoc.jar"/>
 	<classpathentry kind="lib" path="librarys/joda-time-2.1/joda-time-2.1-sources.jar"/>
 	<classpathentry kind="lib" path="librarys/joda-time-2.1/joda-time-2.1.jar"/>
+	<classpathentry kind="lib" path="/Users/Tom/Downloads/commons-codec-1.7/commons-codec-1.7.jar"/>
+	<classpathentry kind="lib" path="/Users/Tom/Downloads/commons-net-3.0.1.jar/commons-net-3.0.1.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

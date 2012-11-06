@@ -86,7 +86,7 @@ public class Session {
 	}
 	
 	public enum State {
-		AUTH, TRANS, UPDATE, FIRST, PASS, CONNECTION_ERROR, TRANSFORM, FIRST_TRANSFORM, DELETING, FIRST_DELETING;
+		AUTH, TRANS, UPDATE, FIRST, PASS, CONNECTION_ERROR, TRANSFORM, FIRST_TRANSFORM, DELETING, FIRST_DELETING, QUIT, RETRIEVING;
 	}
 	
 	public class Command {
@@ -95,7 +95,7 @@ public class Session {
 		private String command;
 		
 		Command(String commandName, String command){
-			this.commandName = commandName;
+			this.commandName = commandName.toLowerCase();
 			this.command = command;
 		}
 		
@@ -133,7 +133,6 @@ public class Session {
 				return new Command(split[0], string);
 		} else {
 			String[] split = string.split(" ");
-			System.out.println("-----" +split[0]);
 			return new Command(split[0], string);
 		}
 	}
@@ -147,8 +146,9 @@ public class Session {
 	}
 
 	public void addBuffer(ByteBuffer buffer) {
-		System.out.println("Agregando buffer1");
 		bufferQueue.add(buffer);
+		SelectionKey ansKey = ((Session) key.attachment()).getKey(); 
+		ansKey.interestOps(ansKey.interestOps() | SelectionKey.OP_WRITE);
 	}
 
 	public void clearBuffers() {
@@ -157,15 +157,15 @@ public class Session {
 	}
 
 	public void addToBuffer(byte[] bytes) {
-		System.out.println("Agregando buffer");
 		ByteBuffer buffer = ByteBuffer.allocate(bytes.length);
 		buffer.put(bytes);
 		buffer.flip();
 		bufferQueue.add(buffer);
+		SelectionKey ansKey = ((Session) key.attachment()).getKey(); 
+		ansKey.interestOps(ansKey.interestOps() | SelectionKey.OP_WRITE);
 	}
 
 	public void addToTransfromThread(ByteBuffer buffer) {
-		System.out.println("Adding a buffer to transformation thread");
 		thread.addBuffer(buffer);
 	}
 	
@@ -182,12 +182,25 @@ public class Session {
 	}
 
 	public void addToMailParsingThread(ByteBuffer buffer) {
-		System.out.println("Adding a buffer to mail thread");
 		mailThread.addBuffer(buffer);
 	}
 	
-	public void initializateMailParsing(List<Restriction> globalRestrictions){
-		mailThread = new MailParsingThread(globalRestrictions, user.getRestrictions(), key);
+	public void initializateMailParsing(List<Restriction> globalRestrictions, int mailToDelete){
+		mailThread = new MailParsingThread(globalRestrictions, user.getRestrictions(), key, mailToDelete);
 		mailThread.start();
 	}
+
+	public void killThreads() {
+		if ( thread != null ) {
+			thread.interrupt();
+		}
+		if ( mailThread != null ) {
+			mailThread.interrupt();
+		}
+		
+	}
+
+	public void finishMailParsing() {
+        mailThread.finished();
+}
 }

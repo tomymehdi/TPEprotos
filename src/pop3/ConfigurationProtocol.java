@@ -1,18 +1,19 @@
 package pop3;
 
 import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
+import java.util.Calendar;
 
+import pop3.restriction.AttachmentTypeRestriction;
 import pop3.restriction.FromRestriction;
 import pop3.restriction.Restriction;
 import pop3.restriction.SizeRestriction;
+import pop3.restriction.StructureRestriction;
 
 public class ConfigurationProtocol {
 
@@ -26,12 +27,11 @@ public class ConfigurationProtocol {
 			throws IOException {
 		SocketChannel clntChan = ((ServerSocketChannel) key.channel()).accept();
 		clntChan.configureBlocking(false);
-		clntChan.register(selector, SelectionKey.OP_READ,
-				ByteBuffer.allocate(Session.BUFFER_SIZE));
+		clntChan.register(selector, SelectionKey.OP_READ, new ConfigSession());
 	}
 
 	public void doRead(Selector selector, SelectionKey key) throws IOException {
-		ByteBuffer buf = (ByteBuffer) key.attachment();
+		ByteBuffer buf = ((ConfigSession) key.attachment()).getBuffer();
 		SocketChannel channel = (SocketChannel) key.channel();
 		int bytesRead = channel.read(buf);
 		if (bytesRead == -1) {
@@ -41,7 +41,6 @@ public class ConfigurationProtocol {
 			byte[] byteArray = new byte[buf.remaining()];
 			buf.get(byteArray);
 			String command = new String(byteArray);
-			System.out.println(command);
 			buf.clear();
 			buf.put(executeCommand(parseCommand(command), key).getBytes());
 			key.interestOps(SelectionKey.OP_WRITE);
@@ -49,7 +48,7 @@ public class ConfigurationProtocol {
 	}
 
 	public void doWrite(Selector selector, SelectionKey key) throws IOException {
-		ByteBuffer buf = (ByteBuffer) key.attachment();
+		ByteBuffer buf = ((ConfigSession) key.attachment()).getBuffer();
 		SocketChannel channel = (SocketChannel) key.channel();
 		buf.flip();
 		channel.write(buf);
@@ -70,28 +69,36 @@ public class ConfigurationProtocol {
 			return "-ERR Unknown command\n";
 		}
 		String command = args[0].toUpperCase();
-		System.out.println(command);
 		args = Arrays.copyOfRange(args, 1, args.length);
+		ConfigSession session = (ConfigSession) key.attachment();
 		if (command.equals("AUTH")) {
-			return executeAuth(args);
-		}
-		if (command.equals("SERVER")) {
-			return executeServer(args);
-		}
-		if (command.equals("DSERVER")) {
-			return executeDefaultServer(args);
-		}
-		if (command.equals("RESTRICT")) {
-			return executeRestrict(args);
-		}
-		if (command.equals("RESTRICTIP")) {
-			return executeRestrictIp(args);
-		}
-		if (command.equals("STAT")) {
-			return executeStat(args);
-		}
-		if (command.equals("CLOSE")) {
-			return executeClose(args, key);
+			if (session.canExecute("auth")) {
+				return executeAuth(args, session);
+			}
+		} else if (command.equals("SERVER")) {
+			if (session.canExecute("server")) {
+				return executeServer(args);
+			}
+		} else if (command.equals("DSERVER")) {
+			if (session.canExecute("dserver")) {
+				return executeDefaultServer(args);
+			}
+		} else if (command.equals("RESTRICT")) {
+			if (session.canExecute("restrict")) {
+				return executeRestrict(args);
+			}
+		} else if (command.equals("RESTRICTIP")) {
+			if (session.canExecute("restrictip")) {
+				return executeRestrictIp(args);
+			}
+		} else if (command.equals("STAT")) {
+			if (session.canExecute("stat")) {
+				return executeStat(args);
+			}
+		} else if (command.equals("CLOSE")) {
+			if (session.canExecute("close")) {
+				return executeClose(args, key);
+			}
 		}
 		return "-ERR Unknown command\n";
 	}
@@ -106,26 +113,54 @@ public class ConfigurationProtocol {
 	}
 
 	private String executeStat(String[] args) {
-		// TODO Recolectar estadisticas
-		return "+OK\n";
+		if (args.length != 0) {
+			Stats stats = proxy.getStats(args[0]);
+			if (stats == null) {
+				return "-ERR No hay estadisticas para ese usuario\n";
+			}
+			StringBuilder builder = new StringBuilder();
+			for (Calendar c : stats.getAccessLog()) {
+				builder.append(c.get(Calendar.DAY_OF_MONTH) + "/"
+						+ c.get(Calendar.MONTH) + "/" + c.get(Calendar.YEAR)
+						+ c.get(Calendar.HOUR_OF_DAY) + ":"
+						+ c.get(Calendar.MINUTE) + ":" + c.get(Calendar.SECOND)
+						+ "\n");
+			}
+			return "+OK Stats follow\nAccess dates:\n" + builder.toString()
+					+ "Bytes transferred: " + stats.getBytesTransfered()
+					+ "\nMails read: " + stats.getEmailsRead()
+					+ "\nMails deleted: " + stats.getEmailsDeleted() + "\n.\n";
+		} else {
+			Stats stats = proxy.getStats();
+			return "+OK Stats follow\nAmount of accesses: "
+					+ stats.getTimesAccessed() + "Bytes transferred: "
+					+ stats.getBytesTransfered() + "\nMails read: "
+					+ stats.getEmailsRead() + "\nMails deleted: "
+					+ stats.getEmailsDeleted() + "\n.\n";
+		}
+
 	}
 
 	private String executeRestrictIp(String[] args) {
 		if (args.length < 1) {
 			return "-ERR Invalid arguments\n";
 		}
-		try {
-			Inet4Address ip = (Inet4Address) Inet4Address.getByName(args[0]);
-			System.out.println(ip.toString());
-			blockIp(ip);
-			return "+OK " + args[0] + " blocked\n";
-		} catch (UnknownHostException e) {
-			return "-ERR Host not found\n";
+		if (args.length > 1) {
+			if (!RestrictedIPs.banIPBySubnet(args[0], args[1])) {
+				return "-ERR Couldnt block that subnet\n";
+			}
+		} else {
+			if (args[0].indexOf('/') != -1) {
+				if (!RestrictedIPs.banIPBySubnet(args[0])) {
+					return "-ERR Couldnt block that subnet\n";
+				}
+			} else {
+				if (!RestrictedIPs.banIPByAddress(args[0])) {
+					return "-ERR Couldnt block that ip\n";
+				}
+			}
 		}
-	}
-
-	private void blockIp(Inet4Address ip) {
-		// TODO Poner el codigo que va
+		return "+OK " + args[0] + " blocked\n";
 	}
 
 	private String executeRestrict(String[] args) {
@@ -197,22 +232,33 @@ public class ConfigurationProtocol {
 	}
 
 	private String addRestriction(String username, Restriction restriction) {
+		if ( username.equals("*") ) {
+            proxy.addGlobalRestriction(restriction);
+            return "+OK Restriction added\n";
+		}
 		User u = proxy.getUsersMap().get(username);
 		if (u == null) {
-			u = new User(proxy.getDefaultServer());
+			u = new User(username, proxy.getDefaultServer());
+			u.setMaxConnections(proxy.getMaxConnections());
 		}
 		u.addRestriction(restriction);
 		return "+OK Restriction added\n";
 	}
 
 	private String setHeaderRestriction(String username, String[] condition) {
-		// TODO Auto-generated method stub
 		return null;
 	}
 
 	private String setContentTypeRestriction(String username, String[] condition) {
-		// TODO Auto-generated method stub
-		return null;
+		if (condition.length < 1) {
+			return "-ERR Invalid arguments\n";
+		}
+		try {
+			return addRestriction(username,
+					new AttachmentTypeRestriction(condition[0]));
+		} catch (NumberFormatException e) {
+			return "-ERR Invalid arguments\n";
+		}
 	}
 
 	private String setSizeRestriction(String username, String[] condition) {
@@ -228,16 +274,35 @@ public class ConfigurationProtocol {
 	}
 
 	private String setStructureRestriction(String username, String[] condition) {
-		// TODO Auto-generated method stub
-		return null;
+		if (condition.length < 1) {
+			return "-ERR Invalid arguments\n";
+		}
+		String conditionAux = "";
+		for ( int i = 0 ; i < condition.length ; i++ ) {
+			conditionAux += condition[i];
+		}
+		try {
+			return addRestriction(username,
+					new StructureRestriction(conditionAux));
+		} catch (NumberFormatException e) {
+			return "-ERR Invalid arguments\n";
+		}
 	}
 
 	private String executeLoginRestrict(String username, int timesPerDay) {
+		if (username.equals("*")) {
+			proxy.setMaxConnections(timesPerDay);
+			for (User u : proxy.getUsersMap().values()) {
+				u.setMaxConnections(timesPerDay);
+			}
+			return "+OK Noone can connect more than " + timesPerDay
+					+ " times now\n";
+		}
 		User u;
 		if (proxy.getUsersMap().containsKey(username)) {
 			u = proxy.getUsersMap().get(username);
 		} else {
-			u = new User(proxy.getDefaultServer());
+			u = new User(username, proxy.getDefaultServer());
 		}
 		proxy.getUsersMap().put(username, u);
 		u.setMaxConnections(timesPerDay);
@@ -249,10 +314,11 @@ public class ConfigurationProtocol {
 		if (proxy.getUsersMap().containsKey(username)) {
 			u = proxy.getUsersMap().get(username);
 		} else {
-			u = new User(proxy.getDefaultServer());
+			u = new User(username, proxy.getDefaultServer());
+			u.setMaxConnections(proxy.getMaxConnections());
 		}
 		proxy.getUsersMap().put(username, u);
-		u.addAllowedConnectionInterval(from, to);
+		u.addUnallowedConnectionInterval(from, to);
 		return "+OK!\n";
 	}
 
@@ -283,25 +349,28 @@ public class ConfigurationProtocol {
 		} else {
 			setServer(username, args.length == 1 ? null : args[1]);
 		}
-		return "+OK " + username + "'s server changed to " + args[1];
+		return "+OK " + username + "'s server changed to "
+				+ (args.length == 1 ? "localhost" : args[1] + "\n");
 	}
 
 	private void setServer(String username, String server) {
 		User u = proxy.getUsersMap().get(username);
 		if (u == null) {
-			proxy.getUsersMap().put(username, new User(server));
-		} else {
-			u.setServer(server);
+			u = new User(username, server);
+			u.setMaxConnections(proxy.getMaxConnections());
+			proxy.getUsersMap().put(username, u);
 		}
+		u.setServer(server);
+
 	}
 
-	private String executeAuth(String[] args) {
+	private String executeAuth(String[] args, ConfigSession session) {
 		if (args.length < 2) {
 			return "-ERR Invalid arguments\n";
 		}
 		String username = args[0], password = args[1];
-		System.out.println(username + "@" + password);
 		if (authenticate(username, password)) {
+			session.authenticated();
 			return "+OK Welcome professor\n";
 		}
 		return "-ERR Incorrect username or password\n";

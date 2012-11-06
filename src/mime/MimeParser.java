@@ -2,9 +2,12 @@ package mime;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 
 public class MimeParser {
 
@@ -31,39 +34,6 @@ public class MimeParser {
 
 	private boolean EOFflag = false;
 
-	public static void main(String[] args) {
-		// String mail = "";
-		// String line = "";
-		//
-		// try {
-		// BufferedReader br = new BufferedReader(new
-		// FileReader("mimeExamples/mimeExample.txt"));
-		// while((line=br.readLine())!=null){
-		// mail += line + '\n';
-		// }MimeParser m = new MimeParser();
-		// MimeInfo mimeInfo = m.parse(mail);
-		// System.out.println(mimeInfo);
-		// } catch (Exception e) {
-		// e.printStackTrace();
-		// }
-
-		// try {MimeParser m = new MimeParser();
-		// m.parse(System.in);
-		// } catch (Exception e){
-		// e.printStackTrace();
-		// }
-
-		try {
-			MimeParser m = new MimeParser();
-			//MimeInfoSimplified aux = m.parseSimplified(System.in);
-			MimeInfo aux2 = m.parse(System.in);
-			//System.out.println(aux);
-			System.out.println(aux2);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-
 	public MimeInfo parse(InputStream in) throws IOException {
 		EOFflag = false;
 		String line;
@@ -83,29 +53,33 @@ public class MimeParser {
 					line = line + nextLine;
 				}
 
+				line += "\n";
+				
 				if (line.startsWith(version)) {
 					headerInfo.version = line.split("MIME-Version: ")[1];
+					resp.addHeader(line);
 				} else if (line.startsWith(received)) {
-
+					resp.addHeader(line);
 				} else if (line.startsWith(date)) {
 					headerInfo.date = line.split("Date: ")[1];
+					resp.addHeader(line);
 				} else if (line.startsWith(messageID)) {
-
+					resp.addHeader(line);
 				} else if (line.startsWith(subject)) {
-
+					resp.addHeader(line);
 				} else if (line.startsWith(from)) {
-
+					resp.addHeader(line);
 				} else if (line.startsWith(to)) {
-
+					resp.addHeader(line);
 				} else if (line.startsWith(contentType)) {
 					aux = line.split("Content-Type: ");
 					aux = aux[1].split(" boundary=");
 					String type = aux[0].replaceAll(";", "");
 					if (aux[0].startsWith("multipart")) {
 						String boundary = aux[1];
-						parseMultipart(mimeParts, type, boundary, in);
+						parseMultipart(mimeParts, type, boundary, in, line);
 					} else {
-						parseNotMultipart(mimeParts, type, in);
+						parseNotMultipart(mimeParts, type, in, line);
 					}
 				} else {
 					// si la opcion con la q empeiza existe,
@@ -120,7 +94,7 @@ public class MimeParser {
 	}
 
 	private void parseNotMultipart(List<MimeMultiPart> mimeParts, String type,
-			InputStream in) throws IOException {
+			InputStream in, String header) throws IOException {
 		String line;
 		String nextLine;
 		String aux[];
@@ -128,6 +102,7 @@ public class MimeParser {
 		mimeParts.add(multiPart);
 		multiPart.type = type;
 		MimePart part = new MimePart();
+		part.addHeader(header);
 		line = getNextLine(in);
 		while (line != null) {
 			if (!line.isEmpty()) {
@@ -136,27 +111,35 @@ public class MimeParser {
 						&& !nextLine.isEmpty() && nextLine.charAt(0) == ' ') {
 					line = line + nextLine;
 				}
+				
+				line += "\n";
+				
 				if (line.startsWith(contentType)) {
+					
 					aux = line.split(contentType);
 					aux = aux[1].split(" boundary=");
 					String typeR = aux[0].replaceAll(";", "");
 					if (aux[0].startsWith("multipart")) {
 						String boundaryR = aux[1];
-						parseMultipart(mimeParts, typeR, boundaryR, in);
+						parseMultipart(mimeParts, typeR, boundaryR, in, line);
 					} else {
+						part.addHeader(line);
 						part.type = typeR;
 					}
 				} else if (line.startsWith(contentTransferEncoding)) {
+					part.addHeader(line);
 					aux = line.split(contentTransferEncoding);
 					part.transferEncoding = aux[1].replaceAll(";", "");
 				} else if (line.startsWith(contentDisposition)) {
+					part.addHeader(line);
 					aux = line.split(contentDisposition);
 					part.contentDisposition = aux[1].replaceAll(";", "");
 				} else if (line.startsWith(attachmentId)) {
+					part.addHeader(line);
 					aux = line.split(attachmentId);
 					part.contentDisposition = aux[1].replaceAll(";", "");
 				} else {
-					part.body += line + '\n';
+					part.body += line;
 				}
 				line = nextLine;
 			} else {
@@ -166,7 +149,7 @@ public class MimeParser {
 	}
 
 	private void parseMultipart(List<MimeMultiPart> mimeParts, String type,
-			String boundary, InputStream in) throws IOException {
+			String boundary, InputStream in, String header) throws IOException {
 		// parsing the multipart if there are multiparts
 		String line;
 		String nextLine;
@@ -174,9 +157,11 @@ public class MimeParser {
 		MimeMultiPart multiPart = new MimeMultiPart();
 		mimeParts.add(multiPart);
 		multiPart.type = type;
+		multiPart.addHeader(header);
 		multiPart.boundary = boundary;
 		MimePart part = new MimePart();
 		line = getNextLine(in);
+		line+="\n";
 		if (!line.equals("--" + boundary)) {
 			throw new RuntimeException();
 		}
@@ -187,11 +172,16 @@ public class MimeParser {
 						&& !nextLine.isEmpty() && nextLine.charAt(0) == ' ') {
 					line = line + nextLine;
 				}
-				if (line.equals("--" + boundary + "--")) {
+				
+				line += "\n";
+				
+				if (line.equals("--" + boundary + "--\n")) {
+					part.addFooter(line);
 					return;
 				} else if (line.equals("--" + boundary)) {
 					part = new MimePart();
 					multiPart.parts.add(part);
+					part.addHeader(line);
 				} else {
 					if (line.startsWith(contentType)) {
 						aux = line.split(contentType);
@@ -199,17 +189,21 @@ public class MimeParser {
 						String typeR = aux[0].replaceAll(";", "");
 						if (aux[0].startsWith("multipart")) {
 							String boundaryR = aux[1];
-							parseMultipart(mimeParts, typeR, boundaryR, in);
+							parseMultipart(mimeParts, typeR, boundaryR, in, line);
 						} else {
+							part.addHeader(line);
 							part.type = typeR;
 						}
 					} else if (line.startsWith(contentTransferEncoding)) {
+						part.addHeader(line);
 						aux = line.split(contentTransferEncoding);
 						part.transferEncoding = aux[1].replaceAll(";", "");
 					} else if (line.startsWith(contentDisposition)) {
+						part.addHeader(line);
 						aux = line.split(contentDisposition);
 						part.contentDisposition = aux[1].replaceAll(";", "");
 					} else if (line.startsWith(attachmentId)) {
+						part.addHeader(line);
 						aux = line.split(attachmentId);
 						part.contentDisposition = aux[1].replaceAll(";", "");
 					} else {
@@ -255,9 +249,6 @@ public class MimeParser {
 		// parsing the mime header
 		line = getNextLine(in);
 		while (line != null) {
-			if ( line.equals(".")) {
-				return resp;
-			}
 			if (!line.isEmpty()) {
 				while ((nextLine = getNextLine(in)) != null
 						&& nextLine.length() >= 1 && nextLine.charAt(0) == ' ') {
@@ -270,7 +261,16 @@ public class MimeParser {
 
 				} else if (line.startsWith(date)) {
 					String dateP = line.split("Date: ")[1];
+					SimpleDateFormat sdf = new SimpleDateFormat(
+							"EEE, d MMM yyyy HH:mm:ss Z", Locale.US);
 					Calendar c = Calendar.getInstance();
+					try {
+						c.setTime(sdf.parse(dateP));
+					} catch (ParseException e) {
+						System.out
+								.println("Couldn't parse date, the email will be considered to have been sent today");
+					}
+					System.out.println(c);
 					resp.setDate(c);
 				} else if (line.startsWith(messageID)) {
 
@@ -287,7 +287,8 @@ public class MimeParser {
 					contentTypeType = aux[0];
 					if (aux[0].startsWith("multipart")) {
 						String boundary = aux[1];
-						parseMultipartSimplified(resp, contentTypeType, boundary, in);
+						parseMultipartSimplified(resp, contentTypeType,
+								boundary, in);
 					} else {
 						parseNotMultipartSimplified(resp, contentTypeType, in);
 					}
@@ -303,8 +304,8 @@ public class MimeParser {
 		return resp;
 	}
 
-	private void parseNotMultipartSimplified(MimeInfoSimplified resp, String type,
-			InputStream in) throws IOException {
+	private void parseNotMultipartSimplified(MimeInfoSimplified resp,
+			String type, InputStream in) throws IOException {
 		String line;
 		String nextLine;
 		String aux[];
@@ -329,7 +330,8 @@ public class MimeParser {
 					aux = aux[1].split(" boundary=");
 					if (aux[0].startsWith("multipart")) {
 						String boundaryR = aux[1];
-						parseMultipartSimplified(resp, contentTypeType, boundaryR, in);
+						parseMultipartSimplified(resp, contentTypeType,
+								boundaryR, in);
 					}
 				} else if (line.startsWith(contentTransferEncoding)) {
 
@@ -356,7 +358,7 @@ public class MimeParser {
 
 	}
 
-	private void parseMultipartSimplified(MimeInfoSimplified resp, String type, 
+	private void parseMultipartSimplified(MimeInfoSimplified resp, String type,
 			String boundary, InputStream in) throws IOException {
 		// parsing the multipart if there are multiparts
 		String line;
@@ -390,9 +392,11 @@ public class MimeParser {
 						if (aux[1].startsWith("multipart")) {
 							aux = aux[1].split(" boundary=");
 							String boundaryR = aux[1];
-							parseMultipartSimplified(resp, contentTypeType, boundaryR, in);
+							parseMultipartSimplified(resp, contentTypeType,
+									boundaryR, in);
 						} else {
-							//parseNotMultipartSimplified(resp, contentTypeType, in);
+							// parseNotMultipartSimplified(resp,
+							// contentTypeType, in);
 						}
 					} else if (line.startsWith(contentTransferEncoding)) {
 

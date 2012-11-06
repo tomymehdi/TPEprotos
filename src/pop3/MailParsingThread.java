@@ -18,12 +18,15 @@ public class MailParsingThread extends Thread{
 	private List<Restriction> restrictions = new LinkedList<Restriction>();
 	private SelectionKey key;
 	private Queue<ByteBuffer> bufferQueue = new LinkedList<ByteBuffer>();
+	private int mailToDelete;
+	private boolean finished = false;
 	
 	public MailParsingThread(List<Restriction> globalRestrictions,
-			List<Restriction> restrictions, SelectionKey key) {
+			List<Restriction> restrictions, SelectionKey key, int mailToDelete) {
 		this.restrictions.addAll(globalRestrictions);
 		this.restrictions.addAll(restrictions);
 		this.key = key;
+		this.mailToDelete = mailToDelete;
 	}
 
 	@Override
@@ -50,21 +53,23 @@ public class MailParsingThread extends Thread{
 						Session session = (Session) key.attachment();
 						if ( mail == null ) {
 							session.addToBuffer("-ERR Surgio un error al borrar el mensaje\n".getBytes());
-							key.interestOps(SelectionKey.OP_WRITE);
 						}
 						for ( Restriction restriction : restrictions ) {
 							if ( !restriction.validateRestriction(mail) ) {
 								session.addToBuffer("-ERR No puede borrar ese mensaje\n".getBytes());
-								key.interestOps(SelectionKey.OP_WRITE);
 								return;
 							}
 						}
 						session.addToBuffer("+OK Mensaje borrado\n".getBytes());
-						key.interestOps(SelectionKey.OP_WRITE);
+						Session ansSession = (Session) session.getKey().attachment();
+						ansSession.addToBuffer(("DELE " + mailToDelete + "\n").getBytes());
 						return;
 					}
 				} catch( IllegalThreadStateException e ) {
 					
+				}
+				if ( finished && bufferQueue.isEmpty() ) {
+                    outputPipe.close();
 				}
 				ByteBuffer b;
 				b = bufferQueue.poll();
@@ -76,13 +81,17 @@ public class MailParsingThread extends Thread{
 				}
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			System.out.println("Error parsing mail!");
 		}
 
 	}
 	
 	public void addBuffer(ByteBuffer b) {
 		bufferQueue.add(b);
+	}
+
+	public void finished() {
+		finished = true;
 	}
 
 }

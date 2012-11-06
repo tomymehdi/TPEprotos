@@ -50,10 +50,7 @@ public class TransformThread extends Thread {
 					char[] charBuffer = new char[Session.BUFFER_SIZE];
 					programOutput.read(charBuffer);
 					Session session = (Session) key.attachment();
-					System.out.println("sending");
 					session.addToBuffer(new String(charBuffer).getBytes());
-					System.out.println(System.currentTimeMillis());
-					key.interestOps(SelectionKey.OP_WRITE);
 				}
 				ByteBuffer b;
 				if ( bufferQueue.isEmpty() ) {
@@ -69,7 +66,7 @@ public class TransformThread extends Thread {
 				programInput.flush();
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			System.out.println("Error transforming!");
 		}
 
 	}

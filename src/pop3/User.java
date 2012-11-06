@@ -14,9 +14,15 @@ public class User {
 	private int connectionCount;
 	private int maxConnections = -1;
 	private TimeInterval unallowedConnectionInterval = new TimeInterval();
+	private String username;
 
-	public User(String server) {
+	public User(String username, String server) {
+		this(username);
 		this.server = server;
+	}
+
+	public User(String username) {
+		this.username = username;
 	}
 
 	public String getServer() {
@@ -25,7 +31,7 @@ public class User {
 
 	public enum ConnectionErrors {
 		MAX_CONNECTIONS_EXCEEDED(
-				"-ERR Excedio la cantidad maxima de conexiones"), NOT_ALLOWED_NOW(
+				"Excedio la cantidad maxima de conexiones"), NOT_ALLOWED_NOW(
 				"No se puede conectar a esta hora");
 
 		String str;
@@ -65,7 +71,7 @@ public class User {
 		}
 	}
 
-	public void addAllowedConnectionInterval(int from, int to) {
+	public void addUnallowedConnectionInterval(int from, int to) {
 		unallowedConnectionInterval.addInterval(from, to);
 	}
 
@@ -128,6 +134,10 @@ public class User {
 
 	public void addRestriction(Restriction restriction) {
 		restrictions.add(restriction);
+	}
+	
+	public String getUsername() {
+		return username;
 	}
 
 }

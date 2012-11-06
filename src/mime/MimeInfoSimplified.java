@@ -32,4 +32,8 @@ public class MimeInfoSimplified {
 	public void setDate(Calendar date) {
 		this.date = date;
 	}
+	
+	public List<AttachmentType> getAttachments() {
+		return attachments;
+	}
 }
